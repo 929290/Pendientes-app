@@ -1,0 +1,52 @@
+name: Compilar EXE (Windows)
+
+on:
+  workflow_dispatch:        # permite lanzarlo a mano desde la pestaña Actions
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write           # necesario para publicar el EXE en "Releases"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Compilar instalador y versión portable
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Ver archivos generados
+        shell: bash
+        run: ls -la dist
+
+      - name: Guardar como archivos descargables
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pendientes-windows
+          path: |
+            dist/Pendientes-Setup.exe
+            dist/Pendientes-Portable.exe
+
+      - name: Publicar en Releases (enlace de descarga directo)
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "pc-v1.${{ github.run_number }}" dist/Pendientes-Setup.exe dist/Pendientes-Portable.exe \
+            --title "Pendientes para Windows v1.${{ github.run_number }}" \
+            --notes "Instalador (Pendientes-Setup.exe) y versión portable (Pendientes-Portable.exe). Si Windows muestra 'protegió su PC', pulsa Más información y luego Ejecutar de todas formas." \
+            --latest=false
