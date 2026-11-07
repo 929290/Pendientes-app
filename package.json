@@ -1,6 +1,6 @@
 {
   "name": "pendientes",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "App de escritorio minimalista para gestionar tareas",
   "main": "main.js",
   "scripts": {
@@ -17,7 +17,11 @@
     "productName": "Pendientes",
     "files": [
       "main.js",
+      "preload.js",
       "index.html",
+      "quick.html",
+      "quick.js",
+      "theme.js",
       "styles.css",
       "app.js",
       "sync.js",

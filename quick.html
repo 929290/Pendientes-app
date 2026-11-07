@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" />
+  <title>Captura rápida</title>
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="quick-body">
+  <form id="quickForm" class="quick" autocomplete="off">
+    <div class="quick-row">
+      <span class="brand-mark small"></span>
+      <input id="quickInput" type="text" maxlength="160" placeholder="Anota una tarea y pulsa Enter…" aria-label="Nueva tarea" />
+    </div>
+    <div class="quick-foot">
+      <div id="quickCats" class="quick-cats"></div>
+      <span class="quick-hint"><kbd>Enter</kbd> guardar · <kbd>Esc</kbd> cerrar</span>
+    </div>
+  </form>
+  <script src="quick.js"></script>
+</body>
+</html>
