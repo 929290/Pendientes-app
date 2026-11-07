@@ -341,6 +341,81 @@
     return changed;
   }
 
+  // ---------- Racha de las tareas que se repiten ----------
+  // Cada vez que a la tarea "le toca" empieza un turno, que dura hasta la siguiente vez.
+  // El turno cuenta si se completó dentro de él. La racha = turnos seguidos cumplidos.
+  // El turno actual, si aún no está hecho, no rompe la racha: todavía hay tiempo.
+  function isOccurrence(rep, day) {
+    const d = parseDate(day);
+    if (rep.type === 'weekly' && rep.days && rep.days.length) return rep.days.includes(d.getDay());
+    if (rep.type === 'monthly') return d.getDate() === Math.min(rep.day, lastDayOf(d.getFullYear(), d.getMonth()));
+    return true;
+  }
+
+  // Última fecha ESTRICTAMENTE anterior a "from" en la que le tocaba la tarea
+  function prevOccurrence(rep, from) {
+    if (rep.type === 'weekly' && rep.days && rep.days.length) {
+      for (let i = 1; i <= 7; i++) {
+        const cand = addDays(from, -i);
+        if (rep.days.includes(parseDate(cand).getDay())) return cand;
+      }
+    }
+    if (rep.type === 'monthly') {
+      const f = parseDate(from);
+      const y = f.getFullYear(), m = f.getMonth();
+      const thisMonth = ymd(new Date(y, m, Math.min(rep.day, lastDayOf(y, m))));
+      if (thisMonth < from) return thisMonth;
+      const py = m === 0 ? y - 1 : y, pm = (m + 11) % 12;
+      return ymd(new Date(py, pm, Math.min(rep.day, lastDayOf(py, pm))));
+    }
+    return addDays(from, -1);
+  }
+
+  function taskStreak(t) {
+    const none = { current: 0, best: 0, todayDone: false };
+    if (!t.repeat || !t.completions || !t.completions.length) return none;
+    const days = [...new Set(t.completions.map(ts => ymd(new Date(ts))))].sort();
+    const today = todayStr();
+    let start = isOccurrence(t.repeat, today) ? today : prevOccurrence(t.repeat, today);
+    let end = nextOccurrence(t.repeat, start);
+    let j = days.length - 1;
+    while (j >= 0 && days[j] >= end) j--; // completadas "en el futuro" (relojes desajustados)
+    let run = 0, best = 0, current = null, todayDone = false;
+    for (let n = 0; n < 4000 && j >= 0; n++) {
+      const hit = days[j] >= start;
+      while (j >= 0 && days[j] >= start) j--;
+      if (n === 0) todayDone = hit;
+      if (hit) run++;
+      else if (n > 0) {
+        if (current === null) current = run;
+        best = Math.max(best, run);
+        run = 0;
+      }
+      end = start;
+      start = prevOccurrence(t.repeat, start);
+    }
+    if (current === null) current = run;
+    best = Math.max(best, run);
+    return { current, best, todayDone };
+  }
+
+  function streakUnit(rep, n) {
+    if (rep.type === 'daily' || (rep.type === 'weekly' && rep.days && rep.days.length === 7)) return n === 1 ? 'día' : 'días';
+    if (rep.type === 'monthly') return n === 1 ? 'mes' : 'meses';
+    return n === 1 ? 'vez' : 'veces';
+  }
+
+  const ICON_FLAME = '<svg viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.1-1.9-5.6-3.6-7.4-.4 1.7-1.3 2.9-2.4 3.4C13.4 7.6 11.6 4.4 8.6 2c.3 3.3-1.3 5.4-2.6 7.2C4.9 10.8 5 12.2 5 15.4 5 19.3 8 22 12 22z"/></svg>';
+
+  function streakHTML(t) {
+    const s = taskStreak(t);
+    if (!s.current) return '';
+    const unit = streakUnit(t.repeat, s.current);
+    const tip = [`Racha: ${s.current} ${unit} seguid${unit === 'vez' || unit === 'veces' ? 'as' : 'os'}`];
+    if (s.best > s.current) tip.push(`Mejor racha: ${s.best}`);
+    if (!s.todayDone) tip.push('Complétala para sumar una más');
+    return `<span class="streak ${s.todayDone ? '' : 'waiting'}" title="${esc(tip.join(' · '))}">${ICON_FLAME}${s.current} ${unit}</span>`;
+  }
   const ICON_REP = '<svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/></svg>';
   const ICON_CAL = '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
   const ICON_EDIT = '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>';
@@ -454,6 +529,7 @@
     let rep = '';
     if (t.repeat) {
       rep = `<span class="rep">${ICON_REP}${repeatLabel(t.repeat)}</span>`;
+      rep += streakHTML(t);
       if (t.done && t.reopenOn) {
         const back = t.reopenOn === addDays(todayStr(), 1)
           ? 'mañana'

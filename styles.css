@@ -509,3 +509,11 @@ body.quick-body { background: transparent; overflow: hidden; padding: 10px; }
 .quick-cats .chip { padding: 4px 10px; font-size: 12px; gap: 6px; white-space: nowrap; }
 .quick-hint { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
 .quick-hint kbd { font-size: 10.5px; padding: 1px 5px; }
+
+/* ---------- Racha de las tareas que se repiten ---------- */
+:root { --streak: #fb923c; }
+:root[data-theme="light"] { --streak: #ea580c; }
+.streak { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--streak); margin-left: 10px; font-variant-numeric: tabular-nums; }
+.streak svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+.streak.waiting { color: var(--faint); font-weight: 500; }
+.streak.waiting svg { fill: none; stroke: currentColor; stroke-width: 2; }
