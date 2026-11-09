@@ -311,10 +311,11 @@
   }
 
   // Marca una tarea como hecha / pendiente y, si es recurrente, calcula cuándo vuelve
-  function applyDone(t, done) {
+  // keepHistory: se reabre sin deshacer lo hecho (por ejemplo, al añadirle una subtarea nueva)
+  function applyDone(t, done, keepHistory = false) {
     // Historial: se anota al completarla; si se desmarca, se quita la última anotación
     if (done && !t.done) t.completions.push(Date.now());
-    if (!done && t.done) t.completions.pop();
+    if (!done && t.done && !keepHistory) t.completions.pop();
     t.done = done;
     if (t.repeat && done) {
       t.doneOn = todayStr();
@@ -326,15 +327,20 @@
   }
 
   // Reabre las recurrentes cuya próxima fecha ya llegó. Devuelve true si cambió algo.
+  // La reapertura es automática (todos los dispositivos llegan a lo mismo por su cuenta), así que
+  // NO cuenta como un cambio nuevo para sincronizar: si contara, un equipo que estuvo apagado
+  // reabriría la tarea con la hora actual y borraría lo que se completó hoy en otro equipo.
   function refreshRecurring() {
     const today = todayStr();
     let changed = false;
     tasks.forEach(t => {
       if (!t.archived && t.repeat && t.done && t.reopenOn && t.reopenOn <= today) {
+        const silent = snap.get(t.id) === strip(t); // no tenía otros cambios pendientes de anotar
         t.done = false;
         t.doneOn = '';
         t.reopenOn = '';
         t.subtasks.forEach(s => { s.done = false; });
+        if (silent) snap.set(t.id, strip(t));
         changed = true;
       }
     });
@@ -559,9 +565,27 @@
     </article>`;
   }
 
+  // Al volver a dibujar una lista se pierde el foco y lo que estabas escribiendo en ella.
+  // Esto lo guarda antes y lo devuelve después al mismo campo (si sigue existiendo).
+  function keepTyping(container, inputSel, rowSel, rowAttr, keepValue, draw) {
+    const a = document.activeElement;
+    const row = a && container.contains(a) && a.matches(inputSel) ? a.closest(rowSel) : null;
+    const saved = row && { id: row.getAttribute(rowAttr), value: a.value, start: a.selectionStart, end: a.selectionEnd };
+    draw();
+    if (!saved) return;
+    const el = [...container.querySelectorAll(rowSel)].find(r => r.getAttribute(rowAttr) === saved.id);
+    const input = el && el.querySelector(inputSel);
+    if (!input) return;
+    if (keepValue) input.value = saved.value;
+    input.focus();
+    try { input.setSelectionRange(saved.start, saved.end); } catch {}
+  }
+
   function render(animate = false) {
     const list = visibleTasks();
-    grid.innerHTML = list.map((t, i) => cardHTML(t, i, animate)).join('');
+    keepTyping(grid, '.sub-input', '.card', 'data-id', true, () => {
+      grid.innerHTML = list.map((t, i) => cardHTML(t, i, animate)).join('');
+    });
     $('#empty').classList.toggle('hidden', list.length > 0);
     renderNav();
     renderProgress();
@@ -675,8 +699,11 @@
   });
 
   $('#fMonthDay').addEventListener('input', e => {
-    repMonthDay = Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1));
+    const n = parseInt(e.target.value, 10);
+    if (Number.isFinite(n)) repMonthDay = Math.min(31, Math.max(1, n)); // vacío: se queda el valor anterior
   });
+  // Al salir del campo se muestra el día que realmente se va a guardar (por ejemplo 45 → 31)
+  $('#fMonthDay').addEventListener('change', e => { e.target.value = repMonthDay; });
 
   $('#taskForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -729,7 +756,7 @@
     const tab = e.target.closest('.tab');
     if (!tab) return;
     view.status = tab.dataset.status;
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('#statusTabs .tab').forEach(t => t.classList.toggle('active', t === tab));
     render(true);
   });
 
@@ -783,6 +810,7 @@
     if (btn.dataset.act === 'edit') openModal(id);
 
     if (btn.dataset.act === 'delete') {
+      if (card.classList.contains('removing')) return; // ya se está borrando (doble clic)
       card.classList.add('removing');
       setTimeout(() => deleteTask(task), 220);
     }
@@ -800,7 +828,7 @@
     const task = tasks.find(t => t.id === card.dataset.id);
     const was = task.done;
     task.subtasks.push({ id: uid(), text, done: false });
-    applyDone(task, false); // una subtarea nueva reabre la tarea si estaba completada
+    applyDone(task, false, true); // una subtarea nueva reabre la tarea, pero lo ya completado sigue en el historial
     card.querySelector('.subs-inner').innerHTML = subsInner(task);
     refreshSubUI(card, task);
     afterChange();
@@ -813,6 +841,10 @@
   const catList = $('#catList');
 
   function renderCatList() {
+    keepTyping(catList, '.cat-name', '.cat-row', 'data-id', false, drawCatList);
+  }
+
+  function drawCatList() {
     catList.innerHTML = categories.map(c => {
       const n = live().filter(t => t.category === c.id).length;
       return `<div class="cat-row" data-id="${esc(c.id)}">
@@ -906,7 +938,11 @@
     if (e.key === 'Escape' && !$('#accountModal').classList.contains('hidden')) { closeAccount(); return; }
     if (e.key === 'Escape' && !catModal.classList.contains('hidden')) { closeCatModal(); return; }
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openModal(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      // Solo si no hay ninguna ventana abierta (si no, se borraría lo que estás escribiendo)
+      if (!document.querySelector('.backdrop:not(.hidden)')) openModal();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !modal.classList.contains('hidden')) {
       $('#taskForm').requestSubmit();
     }

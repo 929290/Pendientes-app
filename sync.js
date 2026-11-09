@@ -108,6 +108,9 @@
     const meta = loadMeta();
     // Si en este dispositivo había datos de OTRA cuenta, se limpian para no mezclarlos
     if (meta.lastUid && meta.lastUid !== s.user.id && hooks) hooks.clearLocal();
+    // Si este dispositivo no tenía ya los datos de esta cuenta (primera vez, se cerró sesión o se
+    // cambió de cuenta), hay que bajarlo TODO desde el principio, no solo lo cambiado desde la última vez.
+    if (meta.lastUid !== s.user.id) meta.pull = {};
     meta.lastUid = s.user.id;
     saveMeta(meta);
     gen++;
@@ -137,6 +140,7 @@
     setSession(null);
     const meta = loadMeta();
     meta.lastUid = null;
+    meta.pull = {}; // se borran las tareas locales: la próxima vez hay que descargarlas todas
     saveMeta(meta);
     if (tk) { try { await request('/auth/v1/logout', { method: 'POST', token: tk }); } catch {} }
     setStatus('off');
